@@ -1,0 +1,75 @@
+
+- hosts:  all
+  become: yes
+  vars:
+      K8_VER: v1.8.0
+      MINI_VER: v0.24.1
+
+  tasks:
+
+    - name: install docker role
+      shell:  ansible-galaxy install geerlingguy.docker
+
+      # we want to run the install docker role locally, not via the client
+    - name: install docker
+      copy:
+        dest: /tmp/install-docker.yml
+        content: |
+              - hosts:  all
+                roles: [geerlingguy.docker]
+    - shell: ansible-playbook -i "localhost," -c local /tmp/install-docker.yml
+
+    - name: docker.json
+      copy:
+        dest: /etc/docker/daemon.json
+        content: {"insecure-registries" : ["{{registry_url}}"] }
+
+    - unarchive:
+        validate_certs: no
+        src: "{{item}}"
+        dest: /usr/bin
+        remote_src: True
+        exclude:
+          - README
+          - README.md
+          - LICENSE
+        mode: 755
+      with_items:
+        - https://{{mirror}}/oc.zip
+        - https://storage.googleapis.com/kubernetes-helm/helm-v2.8.2-linux-amd64.tar.gz
+
+    - get_url:
+        validate_certs: no
+        url: "{{item}}"
+        dest: /usr/bin/{{ (item |  urlsplit('path') | basename).split('-')[0]}}
+        mode: 755
+      with_items:
+        - https://github.com/kubernetes/minikube/releases/download/{{MINI_VER}}/minikube-linux-amd64
+        - https://storage.googleapis.com/kubernetes-release/release/{{K8_VER}}/bin/linux/amd64/kubectl
+
+    - copy:
+        content: |
+                 #!/bin/bash
+                 /etc/init.d/docker start
+                 export MINIKUBE_HOME=/minikube
+                 export MINIKUBE_WANTUPDATENOTIFICATION=false
+                 export MINIKUBE_WANTREPORTERRORPROMPT=false
+                 export CHANGE_MINIKUBE_NONE_USER=true
+                 minikube start --vm-driver=none
+                 dockerize -wait tcp://127.0.0.1:8443 -timeout 120s
+                 mkdir -p /var/jenkins_home/.kube/
+                 cp /root/.kube/config /var/jenkins_home/.kube/
+                 chown -R jenkins /var/jenkins_home/.kube
+
+        dest: /usr/bin/start-k8
+
+    - file:
+        path: /usr/bin/start-k8
+        mode: 755
+
+    - name: copy registry sync script
+      copy:
+          dest: /usr/bin/
+          src: ../registry-sync
+          mode: 755
+

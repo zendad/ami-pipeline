@@ -1,0 +1,82 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+    - group:
+        name: jenkins
+
+    - user:
+        name: jenkins
+        create_home: true
+        shell: /bin/bash
+        home: /var/lib/jenkins
+        group: jenkins
+
+    - name: Download Swarm
+      get_url:
+        validate_certs: no
+        url: https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/swarm-client/3.9/swarm-client-3.9.jar
+        dest: /usr/bin/swarm
+        mode: 755
+
+    - name: install jenkins-slave service
+      copy:
+        dest: /usr/lib/systemd/system/jenkins-slave.service
+        content: |
+          [Unit]
+          Description=Jenkins Slave
+
+          [Service]
+          Restart=on-failure
+          EnvironmentFile=/etc/environment
+          ExecStart=/usr/bin/java -Djava.io.tmpdir=/mnt/nvm/tmp -jar /usr/bin/swarm  -fsroot /mnt/nvm/jenkins -executors $JENKINS_EXECUTORS  -master $JENKINS_MASTER -username $JENKINS_USER -password $JENKINS_PASS -labels "${JENKINS_LABELS}" -t "JDK8=/usr/lib/jvm/java-openjdk"
+          User=root
+          LimitNOFILE=1024000
+          LimitNPROC=500000
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: tune kernel
+      shell: echo 5000000 > /proc/sys/fs/file-max
+
+    - name: switch home directory to nvm
+      shell: mkdir -p /mnt/nvm/root; sed 's|/root:|/mnt/nvm/root:|' -i /etc/passwd
+
+    - name: switch docker home to nvm
+      shell: sed -i 's/ExecStart=\/usr\/bin\/dockerd$/ExecStart=\/usr\/bin\/dockerd --data-root \/mnt\/nvm\/docker/'  /usr/lib/systemd/system/docker.service
+
+    - name: Install Jenkins
+      shell: rpm -i https://pkg.jenkins.io/redhat/jenkins-2.145-1.1.noarch.rpm
+
+    - name: Disable jenkins service (it should be enabled during config)
+      shell: systemctl disable jenkins
+
+    - name: Redirect ports 80 and 443
+      shell: install_http_routing
+
+    - name: Extract cli
+      shell: unzip -j -o "/usr/lib/jenkins/jenkins.war" "WEB-INF/jenkins-cli.jar" -d "/usr/bin/"
+
+    - name: Install cli  shortcut
+      copy:
+        dest: /usr/bin/cli
+        content: java -jar /usr/bin/jenkins-cli.jar  -s http://localhost:8080 -auth admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword) $@
+        mode: 0755
+
+    - name: Copy plugins list
+      copy:
+          dest: "/var/lib/jenkins/"
+          src: "{{item}}"
+      tags:
+        - plugins
+      with_items:
+        - ../install_plugins.sh
+        - ../plugins.txt
+
+    - name: Install plugins
+      shell:  sh /var/lib/jenkins/install_plugins.sh < /var/lib/jenkins/plugins.txt
+      failed_when: false
+      tags:
+        - plugins

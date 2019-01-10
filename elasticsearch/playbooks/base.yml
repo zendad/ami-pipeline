@@ -1,0 +1,106 @@
+
+- hosts:  all
+  become: yes
+  vars:
+      NODE_VER: 6.9.0
+      base: {{mirror}}
+
+  tasks:
+
+    - name: enable optional repo
+      shell: yum-config-manager --enable rhui-REGION-rhel-server-optional
+
+    - name: enable extras repo
+      shell: yum-config-manager --enable rhui-REGION-rhel-server-extras
+
+    - name: install packages
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - xmlstarlet
+        - gcc
+        - ruby
+        - ruby-devel
+
+
+    - name: install ansible
+      shell: pip install ansible
+
+    - file:
+        path: /etc/ansible
+        state: directory
+
+    - name: ansible host key checks
+      copy:
+        dest: /etc/ansible/ansible.cfg
+        content: |
+          [defaults]
+          host_key_checking = False
+
+    - name: configure git
+      shell: git config -f /etc/gitconfig --add user.name Jenkins && git config -f /etc/gitconfig --add user.email jenkins@discovery.co.za
+
+    - copy:
+        dest: /usr/bin/checkLineEndings.sh
+        content: |
+            #!/bin/bash
+
+            FILES=`find -type f | grep -v ".git"`
+            for FILE in $FILES; do
+              dos2unix $FILE > /dev/null 2>&1
+            done
+            LINES_WITH_CR=`git status | grep modified | wc | awk '{print $1}'`
+            if [ "$LINES_WITH_CR" != "0" ]; then
+              echo "Please remove carraige returns from the following files:"
+              FILES=$(git status | grep modified | cut -d: -f2)
+              for FILE in $FILES; do
+                echo "  $FILE"
+              done
+            fi
+    - file:
+        path: /usr/bin/checkLineEndings.sh
+        mode: 0755
+
+    - name: install gems
+      shell: gem install "{{item}}" --no-ri --no-rdoc
+      ignore_errors: yes
+      with_items:
+        - compass
+        - sass
+
+    - name: install nodejs
+      shell: cd /opt; wget  --no-check-certificate -O node.tar.gz "https://nodejs.org/dist/v{{NODE_VER}}/node-v{{NODE_VER}}-linux-x64.tar.gz" && tar xzvf node.tar.gz && rm node.tar.gz && mv $(ls | grep node) nodejs && ln -s /opt/nodejs/bin/node /usr/bin/node && ln -s /opt/nodejs/bin/npm /usr/bin/npm
+
+    - name: add node bin to path
+      copy:
+        content: 'PATH="$PATH:/opt/nodejs/bin"'
+        dest: /etc/profile.d/nodejs.sh
+
+    - file:
+        path: /etc/profile.d/nodejs.sh
+        mode: 0755
+
+    - name: install nodejs packages
+      shell: source /etc/profile.d/nodejs.sh && npm install -g "{{item}}"
+      ignore_errors: yes
+      with_items:
+        - gulp-cli
+        - jsonlint
+        - set-version
+
+    - get_url:
+          validate_certs: no
+          url: "{{item}}"
+          dest: /usr/bin/{{ (item |  urlsplit('path') | basename).split('-')[0]}}
+          mode: 755
+      with_items:
+          - "{{base}}/packer/1.2.1/packer"
+          - "{{base}}/dockerize/0.5.0/dockerize"
+          - "{{base}}/waiter/0.1/waiter"
+
+
+    - name: install packages
+      shell: rpm -U "{{base}}/{{item}}"
+      with_items:
+        - inspec-2.0.45-1.el7.x86_64.rpm

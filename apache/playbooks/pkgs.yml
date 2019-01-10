@@ -1,0 +1,78 @@
+
+  - hosts: all
+    vars:
+      gradle: 2.7
+      ant: 1.9.13
+      groovy: 2.4.12
+      sbt: 1.0.2
+      mvn: 3.5.4
+      helm_ver: v2.11.0
+      helm_platform: linux-amd64
+      helm_install_dir: /opt/helm
+      packages:
+          - url: https://services.gradle.org/distributions/gradle-{{gradle}}-bin.zip
+            folder: gradle-{{gradle}}
+            bin: bin/gradle
+          - url: https://www-eu.apache.org/dist/ant/binaries/apache-ant-{{ant}}-bin.zip
+            folder: apache-ant-{{ant}}
+            bin: bin/ant
+          - url: https://dl.bintray.com/groovy/maven/apache-groovy-binary-{{groovy}}.zip
+            folder: groovy-{{groovy}}
+            bin: bin/groovy
+          - url: https://github.com/sbt/sbt/releases/download/v{{sbt}}/sbt-{{sbt}}.tgz
+            folder: sbt
+            bin: bin/sbt
+          - url: http://www-eu.apache.org/dist/maven/maven-3/{{mvn}}/binaries/apache-maven-{{mvn}}-bin.zip
+            folder: apache-maven-{{mvn}}
+            bin: bin/mvn
+            
+    tasks:
+      - name: "download {{item.url}}"
+        with_items: "{{packages}}"
+        failed_when: false
+        unarchive:
+          src: "{{item.url}}"
+          creates: "/opt/{{item.folder}}"
+          remote_src: yes
+          dest: "/opt"
+
+      - name: "add {{ item.bin | basename }} to path"
+        with_items: "{{packages}}"
+        failed_when: false
+        file:
+          src:  "/opt/{{item.folder}}/{{item.bin}}"
+          force: yes
+          dest: "/usr/bin/{{item.bin | basename }}"
+          state: link
+     
+      - name: create helm install dir
+        file:
+          path: "{{helm_install_dir}}"
+          state: directory
+          mode: 0755
+
+      - name: download helm
+        get_url:
+          url: "https://storage.googleapis.com/kubernetes-helm/helm-{{helm_ver}}-{{helm_platform}}.tar.gz"
+          dest: "/tmp/helm-{{helm_ver}}-{{helm_platform}}.tar.gz"
+          mode: 0655
+
+      - name: unarchive helm
+        unarchive:
+          copy: no
+          src: "/tmp/helm-{{helm_ver}}-{{helm_platform}}.tar.gz"
+          dest: "{{helm_install_dir}}"
+          creates: "{{helm_install_dir}}/{{helm_platform}}"
+
+      - name: clean up
+        file:
+          path: "/tmp/helm-{{helm_ver}}-{{helm_platform}}.tar.gz"
+          state: absent
+   
+      - name: create helm link
+        with_items:
+          - helm
+        file:
+          src: "{{helm_install_dir}}/{{helm_platform}}/{{item}}"
+          dest: "/usr/bin/{{item}}"
+          state: link

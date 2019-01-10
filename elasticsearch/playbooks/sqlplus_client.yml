@@ -1,0 +1,45 @@
+- hosts:  all
+  become: yes
+  vars:
+      base: https:///{{mirror}}/oracle_sqlplus
+
+  tasks:
+    - name: install packages
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - libaio
+
+    - name: install oracle client packages
+      shell: rpm -FU "{{base}}/{{item}}"
+      with_items:
+        - oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm
+        - oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.x86_64.rpm
+        - oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm
+        - oracle-instantclient12.2-jdbc-12.2.0.1.0-1.x86_64.rpm
+        - oracle-instantclient12.2-odbc-12.2.0.1.0-2.x86_64.rpm
+        - oracle-instantclient12.2-tools-12.2.0.1.0-1.x86_64.rpm
+
+    - name: make liquibase install dir
+      file:
+        path: /opt/liquibase/
+        state: directory
+        mode: 0755
+
+    - name: unarchive...
+      unarchive:
+        src: https://github.com/liquibase/liquibase/releases/download/liquibase-parent-3.6.2/liquibase-3.6.2-bin.tar.gz
+        remote_src: true
+        dest: /opt/liquibase/
+
+    - name: cleanup
+      file:
+        path: /tmp/liquibase.tar.gz
+        state: absent
+
+    - name: copy liquibase libs
+      shell: cp -pr /opt/liquibase/sdk/lib-sdk/* /opt/liquibase/lib/
+
+    - name: configure oracle client
+      shell: echo "ORACLE_HOME=/usr/lib/oracle/12.2/client64/" >> /etc/profile.d/env.sh &&  echo "LD_LIBRARY_PATH=/usr/lib/oracle/12.2/client64/lib" >> /etc/profile.d/env.sh  && echo "LIQUIBASE_HOME=/opt/liquibase/"  >> /etc/profile.d/env.sh && echo "PATH=$PATH:/opt/liquibase/:/usr/lib/oracle/12.2/client64/bin/" >> /etc/profile.d/env.sh
