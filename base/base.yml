@@ -1,0 +1,52 @@
+
+  - hosts: all
+    gather_facts: true
+    vars:
+      "base": "https://{{mirror}}/vg-binary-mirror"
+    tasks:
+
+      - name: Add repository
+        block:
+           - name: Check if EPEL repo is there
+             stat: path=/etc/yum.repos.d/epel.repo
+             register: epelPresent
+
+           - name: Install EPEL repo
+             yum:
+               name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
+               state: present
+             when: not epelPresent.stat.exists
+
+           - name: Import GPG Key
+             rpm_key:
+               key: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}
+               state: present
+             when: not epelPresent.stat.exists
+        tags:
+          epel
+
+
+      - name: AWS CodeCommit credential helper
+        shell: git config --global credential.helper '!aws codecommit credential-helper $@' && git config --global credential.UseHttpPath true
+
+      - name: install pip packages
+        shell: pip install "{{item}}"
+        with_items:
+          - yamllint
+          - s3cmd
+          - awscli
+
+      - name: install cfengine & systools
+        shell: sudo rpm -i {{item}}
+        with_items:
+          - https://{{mirror}}/vg-binary-mirror/cfengine-community-3.10.2-1.el6.x86_64.rpm
+          - https://{{mirror}}/vg-binary-mirror/aws-systools-1.0-1.x86_64.rpm
+
+      - get_url:
+          validate_certs: no
+          url: "{{item}}"
+          dest: /usr/bin/{{ (item |  urlsplit('path') | basename).split('-')[0]}}
+          mode: 755
+        with_items:
+          - "{{base}}/awless/0.1.8/awless"
+          - "{{base}}/jq/1.5/jq"

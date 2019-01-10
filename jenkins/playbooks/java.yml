@@ -1,0 +1,38 @@
+  - hosts: all
+    vars:
+      JVM_PATH: "/etc/alternatives/jre"
+      base: {{mirror}}
+      jce_url: "{{base}}/jce_policy-8.zip"
+      alpn_url: "{{base}}/jetty-alpn-agent-2.0.6.jar"
+
+    tasks:
+
+        - name: install JDK
+          yum: name={{item}}
+          with_items:
+            - "java-1.7.0-openjdk"
+            - "java-1.7.0-openjdk-accessibility"
+            - "java-1.7.0-openjdk-demo"
+            - "java-1.7.0-openjdk-devel"
+            - "java-1.7.0-openjdk-javadoc"
+            - "java-1.7.0-openjdk-src"
+            - "java-1.8.0-openjdk"
+            - "java-1.8.0-openjdk-accessibility"
+            - "java-1.8.0-openjdk-debug"
+            - "java-1.8.0-openjdk-demo"
+            - "java-1.8.0-openjdk-devel"
+            - "java-1.8.0-openjdk-javadoc"
+            - "java-1.8.0-openjdk-javadoc-zip"
+            - "java-1.8.0-openjdk-src"
+
+        - name: download and install JCE
+          shell: "curl '{{jce_url}}' > /tmp/jce.zip"
+
+        - shell: unzip -j -o /tmp/jce.zip UnlimitedJCEPolicyJDK8/local_policy.jar -d {{JVM_PATH}}/lib/security
+
+        - shell: unzip -j -o /tmp/jce.zip UnlimitedJCEPolicyJDK8/US_export_policy.jar -d {{JVM_PATH}}/lib/security
+
+        - shell: rm -f /tmp/jce.zip
+
+        - name: download and  install ALPN
+          shell: curl {{alpn_url}} > {{JVM_PATH}}/lib/jetty-alpn-agent-2.0.6.jar

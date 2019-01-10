@@ -1,0 +1,59 @@
+{
+    "variables": {
+        "name": "{{env `NAME`}}",
+        "rhel": "{{env `RHEL`}}",
+        "rhel_version": "{{env `RHEL_MAJOR`}}",
+        "kernel": "{{env `KERNEL`}}"
+    },
+    "builders": [{
+        "type": "amazon-ebs",
+        "region": "eu-west-1",
+        "source_ami_filter": {
+            "filters": {
+                "name": "RHEL-{{user `rhel`}}-*"
+            },
+            "most_recent": true
+        },
+        "instance_type": "t2.medium",
+        "ssh_username": "ec2-user",
+        "ssh_keypair_name": "packer",
+        "ssh_agent_auth": true,
+        "ami_name": "base-{{user `rhel_version`}}-{{isotime \"2006-01-02T1504\"}}",
+        "ami_description": "RHEL-{{user `rhel`}}-{{user `rhel_version`}} with {{user `kernel`}}",
+        // "disable_stop_instance": true,
+        "ami_users": [""],
+        "launch_block_device_mappings": [{
+            "device_name": "/dev/sda1",
+            "volume_size": 50,
+            "volume_type": "gp2",
+            "delete_on_termination": true
+        }]
+    }],
+    "provisioners": [{
+        "type": "ansible",
+        "playbook_file": "./ti-config/ami.yml",
+        "extra_arguments": ["--sudo"]
+    }, {
+        "type": "ansible",
+        "playbook_file": "base.yml",
+        "extra_arguments": ["--sudo"]
+    }, {
+        "type": "shell",
+        "inline": [
+            "sudo yum install -y kernel-{{user `kernel`}}"
+        ]
+    }, {
+        "type": "shell",
+        "inline": ["echo restarting"]
+    },{
+        "type": "shell",
+        "inline": [
+            "nohup shutdown -r now < /dev/null > /dev/null 2>&1 &",
+        ]
+    }, {
+        "type": "shell",
+        "inline": "uname -r",
+        "pause_before": "30s"
+    }]
+
+}

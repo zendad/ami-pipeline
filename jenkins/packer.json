@@ -1,0 +1,49 @@
+{
+    "builders": [{
+        "type": "amazon-ebs",
+        "region": "us-east-1",
+        "instance_type": "i3.large",
+        "ssh_username": "ec2-user",
+        "source_ami_filter": {
+            "filters": {
+                "name": "TPL-RHEL75-BASE-*",
+                "is-public": "false"
+            },
+            "most_recent": true
+        },
+        "ami_name": "fitnesse-{{isotime \"2006-01-02T1504\"}}",
+        "ami_users": [""],
+        "launch_block_device_mappings": [{
+            "device_name": "/dev/sda1",
+            "volume_size": 50,
+            "volume_type": "gp2",
+            "delete_on_termination": true
+        }]
+    }],
+    "provisioners": [{
+        "type": "ansible",
+        "playbook_file": "playbooks/base.yml",
+        "extra_arguments": ["--sudo"]
+    },  {
+        "type": "ansible",
+        "playbook_file": "playbooks/docker-and-k8.yml",
+        "extra_arguments": ["--sudo"]
+    }, {
+        "type": "ansible",
+        "playbook_file": "playbooks/java.yml",
+        "extra_arguments": ["--sudo"]
+    },{
+        "type": "ansible",
+        "playbook_file": "playbooks/pkgs.yml",
+        "extra_arguments": ["--sudo"]
+    },{
+        "type": "ansible",
+        "playbook_file": "playbooks/sqlplus_client.yml",
+        "extra_arguments": ["--sudo"]
+    },{
+        "type": "ansible",
+        "playbook_file": "playbooks/jenkins.yml",
+        "ansible_env_vars": ["ANSIBLE_REMOTE_TEMP=/tmp"],
+        "extra_arguments": ["--sudo", "-vv"]
+    }]
+}

@@ -1,0 +1,47 @@
+{
+    "builders": [{
+        "type": "amazon-ebs",
+        "region": "us-east-1",
+        "source_ami": "ami-ae7bfdb8",
+        "instance_type": "t2.medium",
+        "ssh_username": "centos",
+        "ami_name": "jenkins-agent-{{isotime \"2006-01-02T1504\"}}",
+        "launch_block_device_mappings": [{
+            "device_name": "/dev/sda1",
+            "volume_size": 50,
+            "volume_type": "gp2",
+            "delete_on_termination": true
+        }]
+    }, {
+        "type": "docker",
+        "image": "centos:centos7.3.1611",
+        "commit": true,
+        "changes": [
+            "ENV JENKINS_USERNAME=jenkins",
+            "ENV JENKINS_PASSWORD=jenkins",
+            "ENV SLAVE_LABELS='swarm devops docker oc ansible ruby nodejs'",
+            "ENV SLAVE_MODE=exclusive",
+            "ENV SLAVE_EXECUTORS=1",
+            "RUN useradd -u 1001 -r -m -d /opt/jenkins-slave -c Jenkins jenkins-slave",
+            "RUN groupadd -g 1010 docker",
+            "RUN gpasswd -a jenkins-slave docker",
+            "USER 1001",
+            "ENTRYPOINT [\"/usr/bin/entrypoint.sh\"]",
+            "CMD [\"/usr/bin/startup.sh\"]"
+        ]
+    }],
+    "provisioners": [
+    {
+        "type": "ansible",
+        "playbook_file": "playbooks/base.yml"
+    }, {
+        "type": "ansible",
+        "playbook_file": "playbooks/java.yml"
+    }, {
+        "type": "ansible",
+        "playbook_file": "playbooks/sqlplus_client.yml"
+    }, {
+        "type": "ansible",
+        "playbook_file": "playbooks/pkgs.yml"
+    }]
+}
